@@ -1,0 +1,90 @@
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const User = require('../models/user');
+
+const {
+  NotFound, Conflict, Unauthorized, BadRequest,
+} = require('../errors');
+
+const { JWT_SECRET, NODE_ENV } = process.env;
+
+const createUser = (req, res, next) => {
+  const {
+    name, email, password,
+  } = req.body;
+    // check if user already exists
+  User.findOne({ email })
+    .then((user) => {
+      if (user) {
+        throw new Conflict('Пользователь с таким e-mail существует');
+      } else {
+        bcrypt.hash(password, 10)
+          .then((hash) => User.create({
+            name,
+            email,
+            password: hash,
+          }))
+            .then(({name, email}) => res.send({name, email,})); //eslint-disable-line
+      }
+    })
+    .catch(next);
+};
+
+const login = (req, res, next) => {
+  const {
+    email, password,
+  } = req.body;
+    // check if user already exists
+  User.findOne({ email }).select('+password')
+    .then((user) => {
+      if (!user) {
+        throw new Unauthorized('Неправильный email или пароль');
+      }
+      return bcrypt.compare(password, user.password)
+        .then((isValid) => {
+          if (isValid) {
+            return user;
+          }
+          throw new Unauthorized('Неправильный email или пароль');
+        });
+    })
+    .then(({ _id }) => {
+      const token = jwt.sign({ _id }, NODE_ENV === 'production' ? JWT_SECRET : 'dev-secret', { expiresIn: '7d' });
+      res.send({ token });
+    })
+    .catch(next);
+};
+
+const getCurrentUser = (req, res, next) => {
+  User.findById(req.user._id)
+    .then((user) => {
+      if (!user) {
+        throw new NotFound('Нет пользователя с таким id');
+      }
+      res.send(user);
+    })
+    .catch(next);
+};
+
+const updateUser = (req, res, next) => {
+  const { name, email } = req.body;
+  User.findByIdAndUpdate(
+    req.user._id,
+    { name, email },
+    { new: true, runValidators: true },
+  )
+    .then((user) => {
+      if (user.name === null || user.email === null) {
+        throw new BadRequest('Незаполнено одно из полей');
+      }
+      res.send({ data: user });
+    })
+    .catch(next);
+};
+
+module.exports = {
+  getCurrentUser,
+  createUser,
+  login,
+  updateUser,
+};
