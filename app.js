@@ -9,7 +9,7 @@ const { requestLogger, errorLogger } = require('./middlewares/logger');
 const { NotFound } = require('./errors');
 const auth = require('./middlewares/auth');
 
-const { PORT = 3000 } = process.env;
+const { PORT = 3008 } = process.env;
 const router = require('./routes');
 
 const app = express();
